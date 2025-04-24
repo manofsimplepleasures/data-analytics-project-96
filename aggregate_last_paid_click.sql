@@ -78,7 +78,7 @@ visits_agg AS (
     utm_medium,
     utm_campaign,
     COUNT(DISTINCT visitor_id) AS visitors_count
-  FROM leads_joined
+  FROM last_paid_clicks
   GROUP BY 1, 2, 3, 4
 ),
 
@@ -126,4 +126,3 @@ ORDER BY
   v.utm_source,
   v.utm_medium,
   v.utm_campaign;
-
