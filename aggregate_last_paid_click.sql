@@ -90,10 +90,10 @@ leads_agg AS (
     utm_campaign,
     COUNT(DISTINCT lead_id) FILTER (WHERE lead_id IS NOT NULL) AS leads_count,
     COUNT(DISTINCT lead_id) FILTER (
-      WHERE closing_reason = 'Успешно реализовано' OR status_id = 142
+      WHERE closing_reason = 'Успешная продажа' OR status_id = 142
     ) AS purchases_count,
     SUM(amount) FILTER (
-      WHERE closing_reason = 'Успешно реализовано' OR status_id = 142
+      WHERE closing_reason = 'Успешная продажа' OR status_id = 142
     ) AS revenue
   FROM leads_joined
   GROUP BY 1, 2, 3, 4
@@ -101,14 +101,14 @@ leads_agg AS (
 
 SELECT
   v.visit_date,
+  v.visitors_count,
   v.utm_source,
   v.utm_medium,
   v.utm_campaign,
-  v.visitors_count,
-  COALESCE(c.total_cost, 0) AS total_cost,
-  COALESCE(l.leads_count, 0) AS leads_count,
-  COALESCE(l.purchases_count, 0) AS purchases_count,
-  COALESCE(l.revenue, 0) AS revenue
+  COALESCE(c.total_cost, 0)::int AS total_cost,
+  COALESCE(l.leads_count, 0)::int AS leads_count,
+  COALESCE(l.purchases_count, 0)::int AS purchases_count,
+  COALESCE(l.revenue, 0)::int AS revenue
 FROM visits_agg v
 LEFT JOIN leads_agg l
   ON v.visit_date = l.visit_date
@@ -122,8 +122,8 @@ LEFT JOIN ads_costs c
  AND v.utm_campaign = c.utm_campaign
 ORDER BY
   revenue DESC NULLS LAST,
-  visit_date ASC,
-  visitors_count DESC,
+  v.visit_date ASC,
   v.utm_source,
   v.utm_medium,
   v.utm_campaign;
+

@@ -1,7 +1,7 @@
 WITH tagged_sessions AS (
   SELECT 
     visitor_id,
-    visit_date::date AS visit_date,
+    visit_date AS visit_date,
     LOWER(source) AS utm_source,
     LOWER(medium) AS utm_medium,
     LOWER(campaign) AS utm_campaign,
@@ -49,4 +49,5 @@ ORDER BY
   visit_date ASC,
   utm_source,
   utm_medium,
-  utm_campaign;
+  utm_campaign
+limit 10;
