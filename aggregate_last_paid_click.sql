@@ -119,10 +119,10 @@ leads_agg AS (
 
 SELECT
   v.visit_date,
+  v.visitors_count,
   v.utm_source,
   v.utm_medium,
   v.utm_campaign,
-  v.visitors_count,
   COALESCE(c.total_cost, 0)::INT AS total_cost,
   COALESCE(l.leads_count, 0)::INT AS leads_count,
   COALESCE(l.purchases_count, 0)::INT AS purchases_count,
