@@ -33,8 +33,8 @@ leads_joined AS (
     lpc.utm_campaign,
     l.lead_id,
     l.created_at,
-
-    -- Приведение суммы к NUMERIC
+    
+    -- Приведение суммы: сначала в text, потом проверка через regex
     CASE 
       WHEN l.amount::text ~ '^[0-9]+(\.[0-9]+)?$' THEN l.amount::NUMERIC
       ELSE NULL
@@ -42,7 +42,7 @@ leads_joined AS (
 
     l.closing_reason,
 
-    -- Приведение status_id к INTEGER
+    -- Приведение ID: сначала в text, потом проверка через regex
     CASE 
       WHEN l.status_id::text ~ '^\d+$' THEN l.status_id::INTEGER
       ELSE NULL
@@ -60,7 +60,6 @@ ads_combined AS (
     LOWER(utm_source) AS utm_source,
     LOWER(utm_medium) AS utm_medium,
     LOWER(utm_campaign) AS utm_campaign,
-
     CASE 
       WHEN daily_spent::text ~ '^[0-9]+(\.[0-9]+)?$' THEN daily_spent::NUMERIC
       ELSE NULL
@@ -124,17 +123,10 @@ SELECT
   v.utm_medium,
   v.utm_campaign,
   v.visitors_count,
-  COALESCE(c.total_cost, 0) AS total_cost,
-  COALESCE(l.leads_count, 0) AS leads_count,
-  COALESCE(l.purchases_count, 0) AS purchases_count,
-  COALESCE(l.revenue, 0) AS revenue,
-
-  -- Метрики
-  ROUND(CASE WHEN v.visitors_count > 0 THEN COALESCE(c.total_cost, 0) / v.visitors_count ELSE NULL END, 2) AS cpu,
-  ROUND(CASE WHEN COALESCE(l.leads_count, 0) > 0 THEN COALESCE(c.total_cost, 0) / l.leads_count ELSE NULL END, 2) AS cpl,
-  ROUND(CASE WHEN COALESCE(l.purchases_count, 0) > 0 THEN COALESCE(c.total_cost, 0) / l.purchases_count ELSE NULL END, 2) AS cppu,
-  ROUND(CASE WHEN COALESCE(c.total_cost, 0) > 0 THEN (COALESCE(l.revenue, 0) - COALESCE(c.total_cost, 0)) / COALESCE(c.total_cost, 0) * 100 ELSE NULL END, 2) AS roi
-
+  COALESCE(c.total_cost, 0)::INT AS total_cost,
+  COALESCE(l.leads_count, 0)::INT AS leads_count,
+  COALESCE(l.purchases_count, 0)::INT AS purchases_count,
+  COALESCE(l.revenue, 0)::INT AS revenue
 FROM visits_agg v
 LEFT JOIN leads_agg l
   ON v.visit_date = l.visit_date
@@ -152,3 +144,4 @@ ORDER BY
   v.utm_source,
   v.utm_medium,
   v.utm_campaign;
+
