@@ -11,16 +11,6 @@ WITH
     WHERE medium IN ('cpc','cpp','cpa','social')
   ),
 
-  daily_visits AS (
-    SELECT
-      visit_date,
-      utm_source,
-      utm_medium,
-      utm_campaign,
-      COUNT(*)    AS visitors_count
-    FROM paid
-    GROUP BY 1,2,3,4
-  ),
 
   last_click AS (
     SELECT
@@ -29,7 +19,7 @@ WITH
       utm_source,
       utm_medium,
       utm_campaign,
-      visit_ts    AS last_visit_ts
+      visit_ts
     FROM (
       SELECT
         visitor_id,
@@ -47,6 +37,32 @@ WITH
     WHERE rn = 1
   ),
 
+  visitors_agg AS (
+    SELECT
+      visit_date,
+      utm_source,
+      utm_medium,
+      utm_campaign,
+      COUNT(*) AS visitors_count
+    FROM last_click
+    GROUP BY 1,2,3,4
+  ),
+
+  ads AS (
+    SELECT
+      campaign_date::date AS visit_date,
+      utm_source,
+      utm_medium,
+      utm_campaign,
+      SUM(daily_spent)     AS total_cost
+    FROM (
+      SELECT campaign_date, utm_source, utm_medium, utm_campaign, daily_spent FROM ya_ads
+      UNION ALL
+      SELECT campaign_date, utm_source, utm_medium, utm_campaign, daily_spent FROM vk_ads
+    ) x
+    GROUP BY 1,2,3,4
+  ),
+
   leads_attributed AS (
     SELECT
       lc.visit_date,
@@ -59,8 +75,8 @@ WITH
       l.amount
     FROM last_click lc
     JOIN leads l
-      ON l.visitor_id  = lc.visitor_id
-     AND l.created_at > lc.last_visit_ts
+      ON l.visitor_id = lc.visitor_id
+     AND l.created_at > lc.visit_ts
   ),
 
   leads_cnt AS (
@@ -86,51 +102,26 @@ WITH
     WHERE status_id = 142
        OR closing_reason = 'Успешно реализовано'
     GROUP BY 1,2,3,4
-  ),
-
-  ads AS (
-    SELECT
-      campaign_date::date AS visit_date,
-      utm_source,
-      utm_medium,
-      utm_campaign,
-      SUM(daily_spent)     AS total_cost
-    FROM (
-      SELECT campaign_date, utm_source, utm_medium, utm_campaign, daily_spent FROM ya_ads
-      UNION ALL
-      SELECT campaign_date, utm_source, utm_medium, utm_campaign, daily_spent FROM vk_ads
-    ) x
-    GROUP BY 1,2,3,4
   )
 
 SELECT
-  dv.visit_date,                 
-  dv.visitors_count,             
-  dv.utm_source,             
-  dv.utm_medium,               
-  dv.utm_campaign,              
+  va.visit_date,
+  va.visitors_count,
+  va.utm_source,
+  va.utm_medium,
+  va.utm_campaign,
   COALESCE(a.total_cost,   0)  AS total_cost,
   COALESCE(lc.leads_count,  0)  AS leads_count,
   COALESCE(p.purchases_count,0)  AS purchases_count,
-  p.revenue  AS revenue
-FROM daily_visits dv
-LEFT JOIN ads       a  ON a.visit_date    = dv.visit_date
-                     AND a.utm_source    = dv.utm_source
-                     AND a.utm_medium    = dv.utm_medium
-                     AND a.utm_campaign  = dv.utm_campaign
-LEFT JOIN leads_cnt lc ON lc.visit_date   = dv.visit_date
-                     AND lc.utm_source   = dv.utm_source
-                     AND lc.utm_medium   = dv.utm_medium
-                     AND lc.utm_campaign = dv.utm_campaign
-LEFT JOIN purchases  p  ON p.visit_date    = dv.visit_date
-                     AND p.utm_source    = dv.utm_source
-                     AND p.utm_medium    = dv.utm_medium
-                     AND p.utm_campaign  = dv.utm_campaign
+  p.revenue                        AS revenue
+FROM visitors_agg AS va
+LEFT JOIN ads       AS a  USING(visit_date, utm_source, utm_medium, utm_campaign)
+LEFT JOIN leads_cnt AS lc USING(visit_date, utm_source, utm_medium, utm_campaign)
+LEFT JOIN purchases AS p  USING(visit_date, utm_source, utm_medium, utm_campaign)
 
 ORDER BY
-  9 DESC NULLS LAST,
-  1  ASC,
-  2  DESC,
-  3  ASC,
-  4  ASC,
-  5  asc;
+  p.revenue          DESC NULLS LAST,
+  va.visitors_count  DESC,
+  va.utm_source      ASC,
+  va.utm_medium      ASC,
+  va.utm_campaign    asc;
