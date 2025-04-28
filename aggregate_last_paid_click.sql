@@ -24,7 +24,7 @@ last_paid_clicks AS (
   WHERE rn = 1
 ),
 
-leads_with_rn AS (
+leads_joined AS (
   SELECT
     lpc.visitor_id,
     lpc.visit_date,
@@ -41,28 +41,20 @@ leads_with_rn AS (
     CASE 
       WHEN l.status_id::text ~ '^\d+$' THEN l.status_id::INTEGER
       ELSE NULL
-    END AS status_id,
-    ROW_NUMBER() OVER (PARTITION BY lpc.visitor_id ORDER BY l.created_at ASC) AS rn
+    END AS status_id
   FROM last_paid_clicks lpc
-  LEFT JOIN leads l 
-    ON lpc.visitor_id = l.visitor_id
-   AND l.created_at::date >= lpc.visit_date
-),
-
-leads_joined AS (
-  SELECT
-    visitor_id,
-    visit_date,
-    utm_source,
-    utm_medium,
-    utm_campaign,
-    lead_id,
-    created_at,
-    amount,
-    closing_reason,
-    status_id
-  FROM leads_with_rn
-  WHERE rn = 1
+  LEFT JOIN (
+    SELECT DISTINCT ON (visitor_id)
+      visitor_id,
+      lead_id,
+      created_at,
+      amount,
+      closing_reason,
+      status_id
+    FROM leads
+    ORDER BY visitor_id, created_at ASC
+  ) l ON lpc.visitor_id = l.visitor_id
+    AND l.created_at::date >= lpc.visit_date
 ),
 
 ads_combined AS (
@@ -95,8 +87,9 @@ ads_costs AS (
     utm_source,
     utm_medium,
     utm_campaign,
-    SUM(COALESCE(daily_spent, 0)) AS total_cost
+    SUM(daily_spent) AS total_cost
   FROM ads_combined
+  WHERE daily_spent IS NOT NULL
   GROUP BY 1, 2, 3, 4
 ),
 
@@ -106,8 +99,9 @@ visits_agg AS (
     utm_source,
     utm_medium,
     utm_campaign,
-    COUNT(DISTINCT visitor_id) FILTER (WHERE lead_id IS NOT NULL) AS visitors_count
+    COUNT(DISTINCT visitor_id) AS visitors_count
   FROM leads_joined
+  WHERE lead_id IS NOT NULL
   GROUP BY 1, 2, 3, 4
 ),
 
@@ -117,7 +111,7 @@ leads_agg AS (
     utm_source,
     utm_medium,
     utm_campaign,
-    COUNT(DISTINCT lead_id) FILTER (WHERE lead_id IS NOT NULL) AS leads_count,
+    COUNT(DISTINCT lead_id) AS leads_count,
     COUNT(DISTINCT lead_id) FILTER (
       WHERE closing_reason = 'Успешная продажа' OR status_id = 142
     ) AS purchases_count,
@@ -125,6 +119,7 @@ leads_agg AS (
       WHERE closing_reason = 'Успешная продажа' OR status_id = 142
     ) AS revenue
   FROM leads_joined
+  WHERE lead_id IS NOT NULL
   GROUP BY 1, 2, 3, 4
 )
 
@@ -134,7 +129,7 @@ SELECT
   v.utm_source,
   v.utm_medium,
   v.utm_campaign,
-  COALESCE(c.total_cost, 0)::INT AS total_cost,
+  c.total_cost::INT AS total_cost,
   COALESCE(l.leads_count, 0)::INT AS leads_count,
   COALESCE(l.purchases_count, 0)::INT AS purchases_count,
   COALESCE(l.revenue, 0)::INT AS revenue
@@ -154,4 +149,5 @@ ORDER BY
   v.visit_date ASC,
   v.utm_source,
   v.utm_medium,
-  v.utm_campaign;
+  v.utm_campaign
+limit 15;
