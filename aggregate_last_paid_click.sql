@@ -1,6 +1,6 @@
 WITH
   paid_sessions AS (
-    SELECT
+    select DISTINCT
       visitor_id,
       visit_date AS visit_ts,
       DATE(visit_date) AS visit_date,
