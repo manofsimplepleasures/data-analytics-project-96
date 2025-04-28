@@ -84,8 +84,8 @@ last_paid_clicks AS (
   WHERE rn = 1
 ),
 
-leads_joined AS (
-  SELECT 
+leads_with_rn AS (
+  SELECT
     lpc.visitor_id,
     lpc.visit_date,
     lpc.utm_source,
@@ -93,25 +93,36 @@ leads_joined AS (
     lpc.utm_campaign,
     l.lead_id,
     l.created_at,
-    
-    -- Приведение суммы: сначала в text, потом проверка через regex
     CASE 
       WHEN l.amount::text ~ '^[0-9]+(\.[0-9]+)?$' THEN l.amount::NUMERIC
       ELSE NULL
     END AS amount,
-
     l.closing_reason,
-
-    -- Приведение ID: сначала в text, потом проверка через regex
     CASE 
       WHEN l.status_id::text ~ '^\d+$' THEN l.status_id::INTEGER
       ELSE NULL
-    END AS status_id
-
+    END AS status_id,
+    ROW_NUMBER() OVER (PARTITION BY lpc.visitor_id ORDER BY l.created_at ASC) AS rn
   FROM last_paid_clicks lpc
   LEFT JOIN leads l 
-    ON lpc.visitor_id = l.visitor_id 
+    ON lpc.visitor_id = l.visitor_id
    AND l.created_at::date >= lpc.visit_date
+),
+
+leads_joined AS (
+  SELECT
+    visitor_id,
+    visit_date,
+    utm_source,
+    utm_medium,
+    utm_campaign,
+    lead_id,
+    created_at,
+    amount,
+    closing_reason,
+    status_id
+  FROM leads_with_rn
+  WHERE rn = 1
 ),
 
 ads_combined AS (
@@ -155,8 +166,8 @@ visits_agg AS (
     utm_source,
     utm_medium,
     utm_campaign,
-    COUNT(DISTINCT visitor_id) AS visitors_count
-  FROM last_paid_clicks
+    COUNT(DISTINCT visitor_id) FILTER (WHERE lead_id IS NOT NULL) AS visitors_count
+  FROM leads_joined
   GROUP BY 1, 2, 3, 4
 ),
 

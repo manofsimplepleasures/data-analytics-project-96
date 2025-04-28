@@ -106,8 +106,8 @@ visits_agg AS (
     utm_source,
     utm_medium,
     utm_campaign,
-    COUNT(DISTINCT visitor_id) AS visitors_count
-  FROM last_paid_clicks
+    COUNT(DISTINCT visitor_id) FILTER (WHERE lead_id IS NOT NULL) AS visitors_count
+  FROM leads_joined
   GROUP BY 1, 2, 3, 4
 ),
 
