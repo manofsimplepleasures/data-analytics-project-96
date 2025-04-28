@@ -1,9 +1,10 @@
 WITH
+  -- 1) все платные сессии: сохраняем TIMESTAMP и DATE
   paid AS (
     SELECT
       visitor_id,
-      visit_date       AS visit_ts,
-      DATE(visit_date) AS visit_date,
+      visit_date       AS visit_ts,            -- полный TIMESTAMP
+      DATE(visit_date) AS visit_date,          -- DATE для группировок
       source           AS utm_source,
       medium           AS utm_medium,
       campaign         AS utm_campaign
@@ -11,15 +12,15 @@ WITH
     WHERE medium IN ('cpc','cpp','cpa','social')
   ),
 
-
+  -- 2) глобальный «last click» по каждому visitor
   last_click AS (
     SELECT
       visitor_id,
-      visit_date,
+      visit_date,     -- DATE
       utm_source,
       utm_medium,
       utm_campaign,
-      visit_ts
+      visit_ts        -- TIMESTAMP последнего клика
     FROM (
       SELECT
         visitor_id,
@@ -37,6 +38,7 @@ WITH
     WHERE rn = 1
   ),
 
+  -- 3) visitors_count = число таких посетителей (последних кликов) по каждой дате/UTM
   visitors_agg AS (
     SELECT
       visit_date,
@@ -48,7 +50,8 @@ WITH
     GROUP BY 1,2,3,4
   ),
 
-  ads AS (
+  -- 4) расходы из Яндекс + VK
+  ads_cost AS (
     SELECT
       campaign_date::date AS visit_date,
       utm_source,
@@ -63,6 +66,7 @@ WITH
     GROUP BY 1,2,3,4
   ),
 
+  -- 5) атрибуция лидов: only those with created_at > last_click.ts
   leads_attributed AS (
     SELECT
       lc.visit_date,
@@ -79,6 +83,7 @@ WITH
      AND l.created_at > lc.visit_ts
   ),
 
+  -- 6) число атрибутированных лидов
   leads_cnt AS (
     SELECT
       visit_date,
@@ -90,6 +95,7 @@ WITH
     GROUP BY 1,2,3,4
   ),
 
+  -- 7) успешные сделки + выручка
   purchases AS (
     SELECT
       visit_date,
@@ -105,23 +111,24 @@ WITH
   )
 
 SELECT
-  va.visit_date,
-  va.visitors_count,
-  va.utm_source,
-  va.utm_medium,
-  va.utm_campaign,
-  COALESCE(a.total_cost,   0)  AS total_cost,
-  COALESCE(lc.leads_count,  0)  AS leads_count,
+  va.visit_date,                   -- 1
+  va.visitors_count,               -- 2
+  va.utm_source,                   -- 3
+  va.utm_medium,                   -- 4
+  va.utm_campaign,                 -- 5
+  COALESCE(ac.total_cost,   0)   AS total_cost,
+  COALESCE(lc.leads_count,  0)   AS leads_count,
   COALESCE(p.purchases_count,0)  AS purchases_count,
-  p.revenue                        AS revenue
+  p.revenue                        AS revenue    -- 9
 FROM visitors_agg AS va
-LEFT JOIN ads       AS a  USING(visit_date, utm_source, utm_medium, utm_campaign)
-LEFT JOIN leads_cnt AS lc USING(visit_date, utm_source, utm_medium, utm_campaign)
-LEFT JOIN purchases AS p  USING(visit_date, utm_source, utm_medium, utm_campaign)
+LEFT JOIN ads_cost     AS ac  USING(visit_date, utm_source, utm_medium, utm_campaign)
+LEFT JOIN leads_cnt    AS lc  USING(visit_date, utm_source, utm_medium, utm_campaign)
+LEFT JOIN purchases    AS p   USING(visit_date, utm_source, utm_medium, utm_campaign)
 
 ORDER BY
-  p.revenue          DESC NULLS LAST,
-  va.visitors_count  DESC,
-  va.utm_source      ASC,
-  va.utm_medium      ASC,
-  va.utm_campaign    asc;
+  9  DESC NULLS LAST,  -- revenue: от большего к меньшему, NULL вконец
+  1   ASC,             -- visit_date: от ранних к поздним
+  2   DESC,            -- visitors_count: убыванием
+  3   ASC,             -- utm_source: алфавит
+  4   ASC,             -- utm_medium
+  5   asc;
