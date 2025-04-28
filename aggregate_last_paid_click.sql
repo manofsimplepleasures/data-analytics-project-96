@@ -1,5 +1,5 @@
 WITH
-  paid AS (
+  paid_sessions AS (
     SELECT
       visitor_id,
       visit_date AS visit_ts,
@@ -11,7 +11,7 @@ WITH
     WHERE medium IN ('cpc', 'cpp', 'cpa', 'social')
   ),
 
-  last_click AS (
+  last_paid_click AS (
     SELECT DISTINCT ON (visitor_id)
       visitor_id,
       visit_date,
@@ -19,22 +19,22 @@ WITH
       utm_medium,
       utm_campaign,
       visit_ts
-    FROM paid
+    FROM paid_sessions
     ORDER BY visitor_id, visit_ts DESC
   ),
 
-  visitors_agg AS (
+  visitors_stats AS (
     SELECT
       visit_date,
       utm_source,
       utm_medium,
       utm_campaign,
-      COUNT(DISTINCT visitor_id) AS visitors_count
-    FROM last_click
+      COUNT(visitor_id) AS visitors_count
+    FROM last_paid_click
     GROUP BY 1, 2, 3, 4
   ),
 
-  ads AS (
+  marketing_costs AS (
     SELECT
       campaign_date::date AS visit_date,
       utm_source,
@@ -45,67 +45,68 @@ WITH
       SELECT campaign_date, utm_source, utm_medium, utm_campaign, daily_spent FROM ya_ads
       UNION ALL
       SELECT campaign_date, utm_source, utm_medium, utm_campaign, daily_spent FROM vk_ads
-    ) x
+    ) combined_ads
     GROUP BY 1, 2, 3, 4
   ),
 
-  leads_attributed AS (
+  attributed_leads AS (
     SELECT
-      lc.visit_date,
-      lc.utm_source,
-      lc.utm_medium,
-      lc.utm_campaign,
+      lpc.visit_date,
+      lpc.utm_source,
+      lpc.utm_medium,
+      lpc.utm_campaign,
       l.lead_id,
       l.status_id,
       l.closing_reason,
-      l.amount
-    FROM last_click lc
-    JOIN leads l ON l.visitor_id = lc.visitor_id AND l.created_at >= lc.visit_ts
+      l.amount,
+      l.created_at
+    FROM last_paid_click lpc
+    JOIN leads l ON l.visitor_id = lpc.visitor_id 
+                AND l.created_at BETWEEN lpc.visit_ts AND lpc.visit_ts + INTERVAL '30 days'
   ),
 
-  leads_cnt AS (
+  leads_stats AS (
     SELECT
       visit_date,
       utm_source,
       utm_medium,
       utm_campaign,
-      COUNT(DISTINCT lead_id) AS leads_count
-    FROM leads_attributed
+      COUNT(lead_id) AS leads_count
+    FROM attributed_leads
     GROUP BY 1, 2, 3, 4
   ),
 
-  purchases AS (
+  revenue_stats AS (
     SELECT
       visit_date,
       utm_source,
       utm_medium,
       utm_campaign,
-      COUNT(DISTINCT lead_id) AS purchases_count,
+      COUNT(lead_id) AS purchases_count,
       SUM(amount) AS revenue
-    FROM leads_attributed
+    FROM attributed_leads
     WHERE status_id = 142 OR closing_reason = 'Успешно реализовано'
     GROUP BY 1, 2, 3, 4
   )
 
 SELECT
-  va.visit_date,
-  va.visitors_count,
-  va.utm_source,
-  va.utm_medium,
-  va.utm_campaign,
-  NULLIF(a.total_cost, 0)::TEXT AS total_cost,
-  COALESCE(lc.leads_count, 0) AS leads_count,
-  COALESCE(p.purchases_count, 0) AS purchases_count,
-  COALESCE(p.revenue, 0) AS revenue
-FROM visitors_agg va
-LEFT JOIN ads a USING(visit_date, utm_source, utm_medium, utm_campaign)
-LEFT JOIN leads_cnt lc USING(visit_date, utm_source, utm_medium, utm_campaign)
-LEFT JOIN purchases p USING(visit_date, utm_source, utm_medium, utm_campaign)
+  vs.visit_date,
+  vs.visitors_count,
+  vs.utm_source,
+  vs.utm_medium,
+  vs.utm_campaign,
+  CASE WHEN mc.total_cost IS NULL OR mc.total_cost = 0 THEN '' ELSE mc.total_cost::TEXT END AS total_cost,
+  COALESCE(ls.leads_count, 0) AS leads_count,
+  COALESCE(rs.purchases_count, 0) AS purchases_count,
+  COALESCE(rs.revenue, 0) AS revenue
+FROM visitors_stats vs
+LEFT JOIN marketing_costs mc USING(visit_date, utm_source, utm_medium, utm_campaign)
+LEFT JOIN leads_stats ls USING(visit_date, utm_source, utm_medium, utm_campaign)
+LEFT JOIN revenue_stats rs USING(visit_date, utm_source, utm_medium, utm_campaign)
 ORDER BY
-  COALESCE(p.revenue, 0) DESC,
-  va.visit_date ASC,
-  va.visitors_count DESC,
-  va.utm_source ASC,
-  va.utm_medium ASC,
-  va.utm_campaign asc
-limit 15;
+  COALESCE(rs.revenue, 0) DESC,
+  vs.visit_date ASC,
+  vs.visitors_count DESC,
+  vs.utm_source ASC,
+  vs.utm_medium ASC,
+  vs.utm_campaign asc;
