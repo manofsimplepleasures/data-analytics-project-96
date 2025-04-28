@@ -32,10 +32,20 @@ leads_joined AS (
     lpc.utm_medium,
     lpc.utm_campaign,
     l.lead_id,
-    l.created_at::date AS created_at,
-    l.amount::NUMERIC AS amount,
+    l.created_at,
+    
+    CASE 
+      WHEN l.amount::text ~ '^[0-9]+(\.[0-9]+)?$' THEN l.amount::NUMERIC
+      ELSE NULL
+    END AS amount,
+
     l.closing_reason,
-    l.status_id::INTEGER AS status_id
+
+    CASE 
+      WHEN l.status_id::text ~ '^\d+$' THEN l.status_id::INTEGER
+      ELSE NULL
+    END AS status_id
+
   FROM last_paid_clicks lpc
   LEFT JOIN leads l 
     ON lpc.visitor_id = l.visitor_id 
@@ -48,7 +58,10 @@ ads_combined AS (
     LOWER(utm_source) AS utm_source,
     LOWER(utm_medium) AS utm_medium,
     LOWER(utm_campaign) AS utm_campaign,
-    daily_spent::NUMERIC AS daily_spent
+    CASE 
+      WHEN daily_spent::text ~ '^[0-9]+(\.[0-9]+)?$' THEN daily_spent::NUMERIC
+      ELSE NULL
+    END AS daily_spent
   FROM ya_ads
   UNION ALL
   SELECT
@@ -56,7 +69,10 @@ ads_combined AS (
     LOWER(utm_source),
     LOWER(utm_medium),
     LOWER(utm_campaign),
-    daily_spent::NUMERIC
+    CASE 
+      WHEN daily_spent::text ~ '^[0-9]+(\.[0-9]+)?$' THEN daily_spent::NUMERIC
+      ELSE NULL
+    END
   FROM vk_ads
 ),
 
@@ -66,7 +82,7 @@ ads_costs AS (
     utm_source,
     utm_medium,
     utm_campaign,
-    SUM(daily_spent) AS total_cost
+    SUM(COALESCE(daily_spent, 0)) AS total_cost
   FROM ads_combined
   GROUP BY 1, 2, 3, 4
 ),
@@ -88,8 +104,8 @@ leads_agg AS (
     utm_source,
     utm_medium,
     utm_campaign,
-    COUNT(DISTINCT visitor_id) AS leads_count,
-    COUNT(DISTINCT visitor_id) FILTER (
+    COUNT(DISTINCT lead_id) FILTER (WHERE lead_id IS NOT NULL) AS leads_count,
+    COUNT(DISTINCT lead_id) FILTER (
       WHERE closing_reason = 'Успешная продажа' OR status_id = 142
     ) AS purchases_count,
     SUM(amount) FILTER (
@@ -101,10 +117,10 @@ leads_agg AS (
 
 SELECT
   v.visit_date,
+  v.visitors_count, 
   v.utm_source,
   v.utm_medium,
   v.utm_campaign,
-  v.visitors_count,
   COALESCE(c.total_cost, 0)::INT AS total_cost,
   COALESCE(l.leads_count, 0)::INT AS leads_count,
   COALESCE(l.purchases_count, 0)::INT AS purchases_count,
