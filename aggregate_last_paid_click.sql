@@ -33,19 +33,15 @@ leads_joined AS (
     lpc.utm_campaign,
     l.lead_id,
     l.created_at,
-    
     CASE 
       WHEN l.amount::text ~ '^[0-9]+(\.[0-9]+)?$' THEN l.amount::NUMERIC
       ELSE NULL
     END AS amount,
-
     l.closing_reason,
-
     CASE 
       WHEN l.status_id::text ~ '^\d+$' THEN l.status_id::INTEGER
       ELSE NULL
     END AS status_id
-
   FROM last_paid_clicks lpc
   LEFT JOIN leads l 
     ON lpc.visitor_id = l.visitor_id 
@@ -117,7 +113,7 @@ leads_agg AS (
 
 SELECT
   v.visit_date,
-  v.visitors_count, 
+  v.visitors_count,
   v.utm_source,
   v.utm_medium,
   v.utm_campaign,
