@@ -1,10 +1,10 @@
 WITH paid_sessions AS (
     SELECT
         visitor_id,
-        visit_date AS visit_ts,
         source AS utm_source,
         medium AS utm_medium,
         campaign AS utm_campaign,
+        visit_date AS visit_ts,
         DATE(visit_date) AS visit_date
     FROM sessions
     WHERE medium IN ('cpc', 'cpp', 'cpa', 'social')
