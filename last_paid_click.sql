@@ -2,13 +2,14 @@ WITH paid_sessions AS (
     SELECT
         visitor_id,
         visit_date AS visit_ts,
-        DATE(visit_date) AS visit_date,
         source AS utm_source,
         medium AS utm_medium,
-        campaign AS utm_campaign
+        campaign AS utm_campaign,
+        DATE(visit_date) AS visit_date
     FROM sessions
     WHERE medium IN ('cpc', 'cpp', 'cpa', 'social')
 ),
+
 last_paid_click AS (
     SELECT DISTINCT ON (visitor_id)
         visitor_id,
@@ -18,8 +19,9 @@ last_paid_click AS (
         utm_campaign,
         visit_ts
     FROM paid_sessions
-    ORDER BY visitor_id, visit_ts DESC
+    ORDER BY visitor_id ASC, visit_ts DESC
 )
+
 SELECT
     visitor_id,
     visit_date,
