@@ -46,7 +46,9 @@ ads_data AS (
             utm_campaign,
             daily_spent
         FROM ya_ads
+        
         UNION ALL
+        
         SELECT
             campaign_date,
             utm_source,
@@ -56,7 +58,11 @@ ads_data AS (
         FROM vk_ads
     ) AS ads
     WHERE campaign_date IS NOT NULL
-    GROUP BY campaign_date::date, utm_source, utm_medium, utm_campaign
+    GROUP BY 
+        campaign_date::date, 
+        utm_source, 
+        utm_medium, 
+        utm_campaign
 ),
 
 attributed_data AS (
@@ -78,11 +84,14 @@ attributed_data AS (
         END) AS revenue
     FROM last_paid_click AS lpc
     LEFT JOIN leads AS l
-        ON
-            lpc.visitor_id = l.visitor_id
-            AND l.created_at BETWEEN lpc.visit_ts AND lpc.visit_ts + interval '31 days'
-            AND l.lead_id IS NOT NULL
-    GROUP BY lpc.visit_date, lpc.utm_source, lpc.utm_medium, lpc.utm_campaign
+        ON lpc.visitor_id = l.visitor_id
+        AND l.created_at BETWEEN lpc.visit_ts AND lpc.visit_ts + interval '31 days'
+        AND l.lead_id IS NOT NULL
+    GROUP BY 
+        lpc.visit_date, 
+        lpc.utm_source, 
+        lpc.utm_medium, 
+        lpc.utm_campaign
 )
 
 SELECT
