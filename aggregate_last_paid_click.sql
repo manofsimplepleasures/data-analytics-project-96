@@ -46,9 +46,7 @@ ads_data AS (
             utm_campaign,
             daily_spent
         FROM ya_ads
-        
         UNION ALL
-        
         SELECT
             campaign_date,
             utm_source,
@@ -58,10 +56,10 @@ ads_data AS (
         FROM vk_ads
     ) AS ads
     WHERE campaign_date IS NOT NULL
-    GROUP BY 
-        campaign_date::date, 
-        utm_source, 
-        utm_medium, 
+    GROUP BY
+        campaign_date::date,
+        utm_source,
+        utm_medium,
         utm_campaign
 ),
 
@@ -83,36 +81,37 @@ attributed_data AS (
             ELSE 0
         END) AS revenue
     FROM last_paid_click AS lpc
-    LEFT JOIN leads AS l
-        ON lpc.visitor_id = l.visitor_id
-        AND l.created_at BETWEEN lpc.visit_ts AND lpc.visit_ts + interval '31 days'
-        AND l.lead_id IS NOT NULL
-    GROUP BY 
-        lpc.visit_date, 
-        lpc.utm_source, 
-        lpc.utm_medium, 
-        lpc.utm_campaign
+                LEFT JOIN leads AS l
+                    ON lpc.visitor_id = l.visitor_id
+                    AND l.created_at BETWEEN lpc.visit_ts
+                        AND lpc.visit_ts + interval '31 days'
+                    AND l.lead_id IS NOT NULL
+    GROUP BY
+                lpc.visit_date,
+                lpc.utm_source,
+                lpc.utm_medium,
+                lpc.utm_campaign
 )
 
 SELECT
-    ad.visit_date,
-    ad.visitors_count,
-    ad.utm_source,
-    ad.utm_medium,
-    ad.utm_campaign,
-    CASE
-        WHEN ac.total_cost IS NULL OR ac.total_cost = 0 THEN ''
-        ELSE ac.total_cost::text
-    END AS total_cost,
-    COALESCE(ad.leads_count, 0) AS leads_count,
-    COALESCE(ad.purchases_count, 0) AS purchases_count,
-    COALESCE(ad.revenue, 0) AS revenue
+        ad.visit_date,
+        ad.visitors_count,
+        ad.utm_source,
+        ad.utm_medium,
+        ad.utm_campaign,
+        CASE
+            WHEN ac.total_cost IS NULL OR ac.total_cost = 0 THEN ''
+            ELSE ac.total_cost::text
+        END AS total_cost,
+        COALESCE(ad.leads_count, 0) AS leads_count,
+        COALESCE(ad.purchases_count, 0) AS purchases_count,
+        COALESCE(ad.revenue, 0) AS revenue
 FROM attributed_data AS ad
-LEFT JOIN ads_data AS ac
-    ON ad.visit_date = ac.visit_date
-    AND ad.utm_source = ac.utm_source
-    AND ad.utm_medium = ac.utm_medium
-    AND ad.utm_campaign = ac.utm_campaign
+        LEFT JOIN ads_data AS ac
+            ON ad.visit_date = ac.visit_date
+            AND ad.utm_source = ac.utm_source
+            AND ad.utm_medium = ac.utm_medium
+            AND ad.utm_campaign = ac.utm_campaign
 ORDER BY
     ad.revenue DESC NULLS LAST,
     ad.visit_date ASC,
@@ -121,3 +120,4 @@ ORDER BY
     ad.utm_medium ASC,
     ad.utm_campaign ASC
 LIMIT 15;
+
