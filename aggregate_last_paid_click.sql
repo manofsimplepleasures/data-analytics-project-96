@@ -56,7 +56,7 @@ ads_data AS (
         FROM vk_ads
     ) AS ads
     WHERE campaign_date IS NOT NULL
-    GROUP BY 1, 2, 3, 4
+    GROUP BY campaign_date::date, utm_source, utm_medium, utm_campaign
 ),
 
 attributed_data AS (
@@ -69,21 +69,20 @@ attributed_data AS (
         COUNT(DISTINCT l.lead_id) AS leads_count,
         COUNT(DISTINCT CASE
             WHEN l.status_id = 142 OR l.closing_reason = 'Успешно реализовано'
-                THEN l.lead_id
+            THEN l.lead_id
         END) AS purchases_count,
         SUM(CASE
             WHEN l.status_id = 142 OR l.closing_reason = 'Успешно реализовано'
-                THEN l.amount
+            THEN l.amount
             ELSE 0
         END) AS revenue
     FROM last_paid_click AS lpc
     LEFT JOIN leads AS l
         ON
             lpc.visitor_id = l.visitor_id
-            AND l.created_at BETWEEN lpc.visit_ts AND lpc.visit_ts
-            + interval '31 days'
+            AND l.created_at BETWEEN lpc.visit_ts AND lpc.visit_ts + interval '31 days'
             AND l.lead_id IS NOT NULL
-    GROUP BY 1, 2, 3, 4
+    GROUP BY lpc.visit_date, lpc.utm_source, lpc.utm_medium, lpc.utm_campaign
 )
 
 SELECT
@@ -93,22 +92,23 @@ SELECT
     ad.utm_medium,
     ad.utm_campaign,
     CASE
-        WHEN ac.total_cost = 0 OR ac.total_cost IS NULL THEN '' ELSE
-            ac.total_cost::text
+        WHEN ac.total_cost IS NULL OR ac.total_cost = 0 THEN ''
+        ELSE ac.total_cost::text
     END AS total_cost,
     COALESCE(ad.leads_count, 0) AS leads_count,
     COALESCE(ad.purchases_count, 0) AS purchases_count,
     COALESCE(ad.revenue, 0) AS revenue
 FROM attributed_data AS ad
-LEFT JOIN
-    ads_data AS ac
-    ON ad.visit_date = ac.visit_date AND ad.utm_source = ac.utm_source AND ad.utm_medium = ac.utm_medium AND ad.utm_campaign = ac.utm_campaign
+LEFT JOIN ads_data AS ac
+    ON ad.visit_date = ac.visit_date
+    AND ad.utm_source = ac.utm_source
+    AND ad.utm_medium = ac.utm_medium
+    AND ad.utm_campaign = ac.utm_campaign
 ORDER BY
-revenue DESC NULLS LAST,
-visit_date ASC,
-visitors_count DESC,
-utm_source ASC,
-utm_medium ASC,
-utm_campaign ASC
+    ad.revenue DESC NULLS LAST,
+    ad.visit_date ASC,
+    ad.visitors_count DESC,
+    ad.utm_source ASC,
+    ad.utm_medium ASC,
+    ad.utm_campaign ASC
 LIMIT 15;
-
