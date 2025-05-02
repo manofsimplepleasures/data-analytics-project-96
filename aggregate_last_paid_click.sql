@@ -120,6 +120,5 @@ ORDER BY
     ad.visitors_count DESC,
     ad.utm_source ASC,
     ad.utm_medium ASC,
-    ad.utm_campaign ASC
-LIMIT 15;
+    ad.utm_campaign ASC;
 
