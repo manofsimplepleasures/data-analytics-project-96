@@ -121,4 +121,3 @@ ORDER BY
     ad.utm_source ASC,
     ad.utm_medium ASC,
     ad.utm_campaign ASC;
-

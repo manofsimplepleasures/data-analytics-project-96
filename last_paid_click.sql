@@ -31,4 +31,3 @@ SELECT
     visit_ts
 FROM last_paid_click
 ORDER BY visitor_id ASC;
-
